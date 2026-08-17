@@ -266,7 +266,7 @@
     color: var(--text);
     border-radius: 6px;
     padding: 7px 8px;
-    font-size: 0.88rem;
+    font-size: 16px;
     font-family: inherit;
   }
   .item-input:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
@@ -299,7 +299,7 @@
     color: var(--text);
     border-radius: 6px;
     padding: 8px;
-    font-size: 0.85rem;
+    font-size: 16px;
     font-family: inherit;
   }
   .add-item-row button {
@@ -334,7 +334,7 @@
     color: var(--text);
     border-radius: 8px;
     padding: 10px;
-    font-size: 0.9rem;
+    font-size: 16px;
     font-family: inherit;
   }
   .add-category-row button {
@@ -880,11 +880,11 @@
   function buildMessage() {
     var lines = ["📋 Inventario di " + todayLabel(), ""];
     state.categories.forEach(function (cat) {
-      if (cat.items.length === 0) return;
+      var filledItems = cat.items.filter(function (it) { return isFilled(it.value); });
+      if (filledItems.length === 0) return;
       lines.push("*" + cat.name.toUpperCase() + "*");
-      cat.items.forEach(function (it) {
-        var val = (it.value || "").trim();
-        lines.push("- " + it.name + ": " + (val === "" ? "⚠️ da controllare" : val));
+      filledItems.forEach(function (it) {
+        lines.push("- " + it.name + ": " + it.value.trim());
       });
       lines.push("");
     });
