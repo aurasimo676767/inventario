@@ -1,0 +1,913 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Check Scorte</title>
+<meta name="description" content="Inventario settimanale per categorie, con generazione automatica del messaggio per WhatsApp." />
+<meta name="theme-color" content="#3E5B3C" />
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%93%8B%3C/text%3E%3C/svg%3E" />
+<style>
+  :root {
+    --bg: #F2F1E6;
+    --surface: #FFFFFF;
+    --surface-2: #E8E6D6;
+    --surface-3: #DEDCC8;
+    --border: #D6D3BE;
+    --text: #23241D;
+    --text-muted: #6C6E5D;
+    --accent: #3E5B3C;
+    --accent-strong: #2C4329;
+    --accent-contrast: #FFFFFF;
+    --warn: #AE4A2E;
+    --warn-bg: #F4DFD3;
+    --warn-border: #DCAF95;
+    --ok-bg: #E2EADA;
+    --ok-border: #BCD1AC;
+    --shadow: rgba(35,36,29,0.10);
+    --whatsapp: #25D366;
+    --whatsapp-contrast: #08210F;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #1A1C16;
+      --surface: #23251D;
+      --surface-2: #2C2F24;
+      --surface-3: #34372A;
+      --border: #3C4032;
+      --text: #EDEBDC;
+      --text-muted: #A3A48F;
+      --accent: #86AD7C;
+      --accent-strong: #9FC194;
+      --accent-contrast: #14200F;
+      --warn: #E1876A;
+      --warn-bg: #3C2A22;
+      --warn-border: #5C3B2C;
+      --ok-bg: #263422;
+      --ok-border: #3A4C31;
+      --shadow: rgba(0,0,0,0.4);
+      --whatsapp: #2FE07A;
+      --whatsapp-contrast: #08210F;
+    }
+  }
+
+  * { box-sizing: border-box; }
+  @media (prefers-reduced-motion: reduce) {
+    * { transition: none !important; animation: none !important; }
+  }
+
+  html, body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    min-height: 100vh;
+  }
+
+  .app {
+    max-width: 520px;
+    margin: 0 auto;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    background: var(--bg);
+  }
+
+  /* ---- Top bar ---- */
+  .topbar {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    background: var(--bg);
+    border-bottom: 1px solid var(--border);
+    padding: 14px 16px 10px;
+  }
+  .topbar-inner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+  .brand {
+    margin: 0;
+    font-size: clamp(1.3rem, 5vw, 1.6rem);
+    font-weight: 800;
+    letter-spacing: 0.01em;
+  }
+  .brand-sub {
+    margin: 2px 0 0;
+    font-size: 0.78rem;
+    color: var(--text-muted);
+    text-transform: capitalize;
+  }
+  .icon-btn {
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--text);
+    width: 40px;
+    height: 40px;
+    border-radius: 8px;
+    font-size: 1.05rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    flex: none;
+  }
+  .icon-btn:active { transform: scale(0.96); }
+  .icon-btn.active {
+    background: var(--accent);
+    color: var(--accent-contrast);
+    border-color: var(--accent);
+  }
+
+  .progress-row {
+    margin-top: 12px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .progress-track {
+    flex: 1;
+    height: 8px;
+    border-radius: 5px;
+    background: var(--surface-2);
+    overflow: hidden;
+  }
+  .progress-fill {
+    height: 100%;
+    background: var(--accent);
+    width: 0%;
+    transition: width 0.25s ease;
+  }
+  .progress-label {
+    font-size: 0.78rem;
+    color: var(--text-muted);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+
+  .backup-row {
+    display: none;
+    gap: 8px;
+    margin-top: 12px;
+  }
+  .app.edit-mode .backup-row { display: flex; }
+  .backup-btn {
+    flex: 1;
+    border: 1px dashed var(--border);
+    background: transparent;
+    color: var(--text-muted);
+    border-radius: 8px;
+    padding: 8px 10px;
+    font-size: 0.78rem;
+    cursor: pointer;
+  }
+  .backup-btn:active { transform: scale(0.98); }
+
+  /* ---- Category list ---- */
+  .category-list {
+    flex: 1;
+    padding: 14px 16px 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .category-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    box-shadow: 0 1px 2px var(--shadow);
+    overflow: hidden;
+  }
+
+  .category-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 12px;
+  }
+  .category-toggle {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: none;
+    border: none;
+    padding: 0;
+    text-align: left;
+    cursor: pointer;
+    color: var(--text);
+    min-width: 0;
+  }
+  .chevron {
+    color: var(--text-muted);
+    font-size: 0.85rem;
+    flex: none;
+    transition: transform 0.15s ease;
+  }
+  .category-card.collapsed .chevron { transform: rotate(-90deg); }
+  .category-name {
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    font-size: 0.92rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .category-count {
+    font-size: 0.78rem;
+    color: var(--text-muted);
+    font-variant-numeric: tabular-nums;
+    flex: none;
+  }
+  .category-count.all-done { color: var(--accent); font-weight: 700; }
+  .category-delete { border-color: var(--warn-border); color: var(--warn); display: none; }
+  .app.edit-mode .category-delete { display: inline-flex; }
+
+  .category-body {
+    border-top: 1px solid var(--border);
+    padding: 10px 12px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .category-card.collapsed .category-body { display: none; }
+
+  .item-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--surface);
+  }
+  .item-row.row-ok { background: var(--ok-bg); border-color: var(--ok-border); }
+  .item-row.row-warn { background: var(--warn-bg); border-color: var(--warn-border); }
+
+  .item-name {
+    flex: 1 1 34%;
+    font-size: 0.88rem;
+    font-weight: 600;
+    overflow-wrap: anywhere;
+  }
+  .item-input {
+    flex: 1 1 34%;
+    min-width: 0;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--text);
+    border-radius: 6px;
+    padding: 7px 8px;
+    font-size: 0.88rem;
+    font-family: inherit;
+  }
+  .item-input:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .chip-finito {
+    flex: none;
+    border: 1px solid var(--warn-border);
+    background: transparent;
+    color: var(--warn);
+    border-radius: 6px;
+    padding: 7px 9px;
+    font-size: 0.76rem;
+    font-weight: 700;
+    cursor: pointer;
+  }
+  .chip-finito.active { background: var(--warn); color: var(--surface); }
+  .item-delete { display: none; flex: none; width: 32px; height: 32px; border-color: var(--warn-border); color: var(--warn); }
+  .app.edit-mode .item-delete { display: inline-flex; }
+  .app.edit-mode .chip-finito { display: none; }
+
+  .add-item-row {
+    display: none;
+    gap: 8px;
+    margin-top: 2px;
+  }
+  .app.edit-mode .add-item-row { display: flex; }
+  .add-item-row input {
+    flex: 1;
+    border: 1px dashed var(--border);
+    background: transparent;
+    color: var(--text);
+    border-radius: 6px;
+    padding: 8px;
+    font-size: 0.85rem;
+    font-family: inherit;
+  }
+  .add-item-row button {
+    flex: none;
+    border: 1px solid var(--accent);
+    background: transparent;
+    color: var(--accent-strong);
+    border-radius: 6px;
+    padding: 8px 10px;
+    font-size: 0.82rem;
+    font-weight: 700;
+    cursor: pointer;
+  }
+
+  .empty-hint {
+    font-size: 0.82rem;
+    color: var(--text-muted);
+    padding: 4px 2px;
+    font-style: italic;
+  }
+
+  .add-category-row {
+    display: none;
+    gap: 8px;
+    padding: 4px 16px 16px;
+  }
+  .app.edit-mode .add-category-row { display: flex; }
+  .add-category-row input {
+    flex: 1;
+    border: 1px dashed var(--border);
+    background: var(--surface);
+    color: var(--text);
+    border-radius: 8px;
+    padding: 10px;
+    font-size: 0.9rem;
+    font-family: inherit;
+  }
+  .add-category-row button {
+    flex: none;
+    border: 1px solid var(--accent);
+    background: var(--accent);
+    color: var(--accent-contrast);
+    border-radius: 8px;
+    padding: 10px 14px;
+    font-size: 0.85rem;
+    font-weight: 700;
+    cursor: pointer;
+  }
+
+  .empty-state {
+    text-align: center;
+    color: var(--text-muted);
+    padding: 40px 20px;
+    font-size: 0.9rem;
+  }
+
+  /* ---- Bottom bar ---- */
+  .bottombar {
+    position: sticky;
+    bottom: 0;
+    display: flex;
+    gap: 10px;
+    padding: 12px 16px calc(12px + env(safe-area-inset-bottom));
+    background: var(--bg);
+    border-top: 1px solid var(--border);
+  }
+  .ghost-btn {
+    flex: none;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--text-muted);
+    border-radius: 8px;
+    padding: 0 14px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .primary-btn {
+    flex: 1;
+    border: none;
+    background: var(--accent);
+    color: var(--accent-contrast);
+    border-radius: 8px;
+    padding: 14px;
+    font-size: 0.95rem;
+    font-weight: 800;
+    letter-spacing: 0.01em;
+    cursor: pointer;
+  }
+  .primary-btn:active, .ghost-btn:active { transform: scale(0.98); }
+
+  /* ---- Modal ---- */
+  .modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.45);
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    z-index: 50;
+    padding: 0;
+  }
+  .modal-overlay[hidden] { display: none; }
+  .modal {
+    width: 100%;
+    max-width: 520px;
+    max-height: 85vh;
+    background: var(--surface);
+    border-radius: 14px 14px 0 0;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    box-shadow: 0 -4px 24px var(--shadow);
+  }
+  .modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .modal-header h2 {
+    margin: 0;
+    font-size: 1.05rem;
+    font-weight: 800;
+  }
+  .message-preview {
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 0.82rem;
+    line-height: 1.5;
+    white-space: pre-wrap;
+    overflow-y: auto;
+    max-height: 45vh;
+    margin: 0;
+  }
+  .modal-actions {
+    display: flex;
+    gap: 10px;
+  }
+  .whatsapp-btn {
+    flex: 1;
+    border: none;
+    background: var(--whatsapp);
+    color: var(--whatsapp-contrast);
+    border-radius: 8px;
+    padding: 14px;
+    font-size: 0.92rem;
+    font-weight: 800;
+    cursor: pointer;
+    text-decoration: none;
+    text-align: center;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .copy-feedback {
+    margin: 0;
+    font-size: 0.8rem;
+    color: var(--accent-strong);
+    min-height: 1em;
+    text-align: center;
+  }
+
+  #importFileInput { display: none; }
+</style>
+</head>
+<body>
+<div class="app" id="app">
+  <header class="topbar">
+    <div class="topbar-inner">
+      <div>
+        <h1 class="brand">Check Scorte</h1>
+        <p class="brand-sub" id="dateLabel"></p>
+      </div>
+      <button id="editToggle" class="icon-btn" aria-label="Modifica lista" title="Modifica lista">✏️</button>
+    </div>
+    <div class="progress-row">
+      <div class="progress-track"><div id="progressFill" class="progress-fill"></div></div>
+      <span id="progressLabel" class="progress-label">0/0</span>
+    </div>
+    <div class="backup-row">
+      <button id="exportBtn" class="backup-btn">💾 Esporta lista (backup)</button>
+      <button id="importBtn" class="backup-btn">📂 Importa lista</button>
+      <input type="file" id="importFileInput" accept="application/json" />
+    </div>
+  </header>
+
+  <main id="categoryList" class="category-list"></main>
+
+  <div class="add-category-row">
+    <input id="newCategoryInput" type="text" placeholder="Nuova categoria (es. Bevande)" />
+    <button id="addCategoryBtn">+ Categoria</button>
+  </div>
+
+  <footer class="bottombar">
+    <button id="resetBtn" class="ghost-btn" title="Svuota tutti i valori per iniziare una nuova settimana">↺ Nuovo</button>
+    <button id="generateBtn" class="primary-btn">Genera messaggio</button>
+  </footer>
+</div>
+
+<div id="modalOverlay" class="modal-overlay" hidden>
+  <div class="modal">
+    <div class="modal-header">
+      <h2>Messaggio pronto</h2>
+      <button id="modalClose" class="icon-btn" aria-label="Chiudi">✕</button>
+    </div>
+    <pre id="messagePreview" class="message-preview"></pre>
+    <div class="modal-actions">
+      <button id="copyBtn" class="ghost-btn" style="flex:1; padding:14px;">📋 Copia</button>
+      <button id="whatsappBtn" class="whatsapp-btn">Apri in WhatsApp</button>
+    </div>
+    <p id="copyFeedback" class="copy-feedback" aria-live="polite"></p>
+  </div>
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  var STORAGE_KEY = "checkScorte_v1";
+
+  function uid() {
+    return Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+  }
+
+  function esc(s) {
+    return String(s).replace(/[&<>"']/g, function (c) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+    });
+  }
+
+  function defaultState() {
+    return {
+      categories: [
+        { id: uid(), name: "Surgelati", items: [] },
+        { id: uid(), name: "Carne", items: [] },
+        { id: uid(), name: "Latticini", items: [] },
+        { id: uid(), name: "Spezie", items: [] }
+      ]
+    };
+  }
+
+  var state = null;
+
+  function load() {
+    try {
+      var raw = localStorage.getItem(STORAGE_KEY);
+      if (raw) {
+        var parsed = JSON.parse(raw);
+        if (parsed && Array.isArray(parsed.categories)) return parsed;
+      }
+    } catch (e) { /* storage unavailable or corrupt — fall back to defaults */ }
+    return defaultState();
+  }
+
+  function save() {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    } catch (e) { /* best effort only — export/import covers this device */ }
+  }
+
+  state = load();
+
+  var app = document.getElementById("app");
+  var categoryList = document.getElementById("categoryList");
+  var editToggle = document.getElementById("editToggle");
+  var progressFill = document.getElementById("progressFill");
+  var progressLabel = document.getElementById("progressLabel");
+  var dateLabel = document.getElementById("dateLabel");
+
+  function todayLabel() {
+    var d = new Date();
+    var s = d.toLocaleDateString("it-IT", { weekday: "long", day: "numeric", month: "long" });
+    return s.charAt(0).toUpperCase() + s.slice(1);
+  }
+  dateLabel.textContent = todayLabel();
+
+  function isFilled(v) { return v && v.trim().length > 0; }
+  function isFinito(v) { return isFilled(v) && v.trim().toLowerCase().indexOf("finit") === 0; }
+
+  function computeProgress() {
+    var total = 0, filled = 0;
+    state.categories.forEach(function (c) {
+      c.items.forEach(function (it) {
+        total++;
+        if (isFilled(it.value)) filled++;
+      });
+    });
+    return { filled: filled, total: total };
+  }
+
+  function updateProgressUI() {
+    var p = computeProgress();
+    progressLabel.textContent = p.filled + "/" + p.total + " compilati";
+    progressFill.style.width = p.total ? Math.round((p.filled / p.total) * 100) + "%" : "0%";
+  }
+
+  function rowClass(value) {
+    if (!isFilled(value)) return "";
+    if (isFinito(value)) return "row-warn";
+    return "row-ok";
+  }
+
+  function renderCategory(cat) {
+    var filled = cat.items.filter(function (it) { return isFilled(it.value); }).length;
+    var total = cat.items.length;
+    var countClass = total > 0 && filled === total ? "all-done" : "";
+
+    var itemsHtml = cat.items.map(function (it) {
+      var cls = rowClass(it.value);
+      var finitoActive = isFinito(it.value) ? "active" : "";
+      return (
+        '<div class="item-row ' + cls + '" data-item-row="' + it.id + '">' +
+          '<div class="item-name">' + esc(it.name) + "</div>" +
+          '<input class="item-input" type="text" inputmode="text" autocomplete="off" ' +
+            'placeholder="es. 2kg, mezza cassa" value="' + esc(it.value || "") + '" ' +
+            'data-action="input-value" data-item-id="' + it.id + '" data-cat-id="' + cat.id + '" />' +
+          '<button class="chip-finito ' + finitoActive + '" data-action="toggle-finito" ' +
+            'data-item-id="' + it.id + '" data-cat-id="' + cat.id + '">Finito</button>' +
+          '<button class="icon-btn item-delete" data-action="delete-item" ' +
+            'data-item-id="' + it.id + '" data-cat-id="' + cat.id + '" aria-label="Elimina">✕</button>' +
+        "</div>"
+      );
+    }).join("");
+
+    if (total === 0) {
+      itemsHtml = '<p class="empty-hint">Nessun ingrediente ancora. Aggiungine uno qui sotto.</p>';
+    }
+
+    return (
+      '<section class="category-card" data-cat-id="' + cat.id + '">' +
+        '<div class="category-header">' +
+          '<button class="category-toggle" data-action="toggle-collapse" data-cat-id="' + cat.id + '">' +
+            '<span class="chevron">▾</span>' +
+            '<span class="category-name">' + esc(cat.name) + "</span>" +
+          "</button>" +
+          '<span class="category-count ' + countClass + '">' + filled + "/" + total + "</span>" +
+          '<button class="icon-btn category-delete" data-action="delete-category" ' +
+            'data-cat-id="' + cat.id + '" aria-label="Elimina categoria">✕</button>' +
+        "</div>" +
+        '<div class="category-body">' +
+          itemsHtml +
+          '<div class="add-item-row">' +
+            '<input type="text" placeholder="Nuovo ingrediente" data-new-item-for="' + cat.id + '" />' +
+            '<button data-action="add-item" data-cat-id="' + cat.id + '">+ Aggiungi</button>' +
+          "</div>" +
+        "</div>" +
+      "</section>"
+    );
+  }
+
+  function render() {
+    if (state.categories.length === 0) {
+      categoryList.innerHTML = '<p class="empty-state">Nessuna categoria. Tocca ✏️ e aggiungine una per iniziare.</p>';
+    } else {
+      categoryList.innerHTML = state.categories.map(renderCategory).join("");
+    }
+    updateProgressUI();
+  }
+
+  render();
+
+  // ---- Edit mode ----
+  editToggle.addEventListener("click", function () {
+    var editing = app.classList.toggle("edit-mode");
+    editToggle.classList.toggle("active", editing);
+    editToggle.textContent = editing ? "✓" : "✏️";
+    editToggle.title = editing ? "Fatto" : "Modifica lista";
+  });
+
+  // ---- Delegated events on category list ----
+  categoryList.addEventListener("click", function (e) {
+    var btn = e.target.closest("[data-action]");
+    if (!btn) return;
+    var action = btn.getAttribute("data-action");
+
+    if (action === "toggle-collapse") {
+      var card = btn.closest(".category-card");
+      card.classList.toggle("collapsed");
+      return;
+    }
+
+    if (action === "delete-category") {
+      var catId = btn.getAttribute("data-cat-id");
+      var cat = state.categories.find(function (c) { return c.id === catId; });
+      if (cat && confirm('Eliminare la categoria "' + cat.name + '" e tutti i suoi ingredienti?')) {
+        state.categories = state.categories.filter(function (c) { return c.id !== catId; });
+        save();
+        render();
+      }
+      return;
+    }
+
+    if (action === "delete-item") {
+      var itCatId = btn.getAttribute("data-cat-id");
+      var itemId = btn.getAttribute("data-item-id");
+      var owner = state.categories.find(function (c) { return c.id === itCatId; });
+      if (owner) {
+        var item = owner.items.find(function (i) { return i.id === itemId; });
+        if (item && confirm('Eliminare "' + item.name + '"?')) {
+          owner.items = owner.items.filter(function (i) { return i.id !== itemId; });
+          save();
+          render();
+        }
+      }
+      return;
+    }
+
+    if (action === "toggle-finito") {
+      var fCatId = btn.getAttribute("data-cat-id");
+      var fItemId = btn.getAttribute("data-item-id");
+      var fCat = state.categories.find(function (c) { return c.id === fCatId; });
+      var fItem = fCat && fCat.items.find(function (i) { return i.id === fItemId; });
+      if (fItem) {
+        fItem.value = isFinito(fItem.value) ? "" : "Finito";
+        save();
+        var row = categoryList.querySelector('[data-item-row="' + fItemId + '"]');
+        var input = row.querySelector(".item-input");
+        input.value = fItem.value;
+        row.className = "item-row " + rowClass(fItem.value);
+        btn.classList.toggle("active", isFinito(fItem.value));
+        refreshCategoryCount(fCatId);
+        updateProgressUI();
+      }
+      return;
+    }
+
+    if (action === "add-item") {
+      var aCatId = btn.getAttribute("data-cat-id");
+      var input = categoryList.querySelector('[data-new-item-for="' + aCatId + '"]');
+      var name = input.value.trim();
+      if (!name) { input.focus(); return; }
+      var aCat = state.categories.find(function (c) { return c.id === aCatId; });
+      aCat.items.push({ id: uid(), name: name, value: "" });
+      save();
+      render();
+    }
+  });
+
+  categoryList.addEventListener("keydown", function (e) {
+    if (e.key === "Enter" && e.target.matches("[data-new-item-for]")) {
+      e.preventDefault();
+      var catId = e.target.getAttribute("data-new-item-for");
+      categoryList.querySelector('[data-action="add-item"][data-cat-id="' + catId + '"]').click();
+    }
+  });
+
+  categoryList.addEventListener("input", function (e) {
+    if (!e.target.matches('[data-action="input-value"]')) return;
+    var catId = e.target.getAttribute("data-cat-id");
+    var itemId = e.target.getAttribute("data-item-id");
+    var cat = state.categories.find(function (c) { return c.id === catId; });
+    var item = cat && cat.items.find(function (i) { return i.id === itemId; });
+    if (!item) return;
+    item.value = e.target.value;
+    save();
+    var row = e.target.closest(".item-row");
+    row.className = "item-row " + rowClass(item.value);
+    var chip = row.querySelector(".chip-finito");
+    chip.classList.toggle("active", isFinito(item.value));
+    refreshCategoryCount(catId);
+    updateProgressUI();
+  });
+
+  function refreshCategoryCount(catId) {
+    var cat = state.categories.find(function (c) { return c.id === catId; });
+    if (!cat) return;
+    var filled = cat.items.filter(function (it) { return isFilled(it.value); }).length;
+    var total = cat.items.length;
+    var badge = categoryList.querySelector('.category-card[data-cat-id="' + catId + '"] .category-count');
+    if (badge) {
+      badge.textContent = filled + "/" + total;
+      badge.classList.toggle("all-done", total > 0 && filled === total);
+    }
+  }
+
+  // ---- Add category ----
+  var newCategoryInput = document.getElementById("newCategoryInput");
+  var addCategoryBtn = document.getElementById("addCategoryBtn");
+  function addCategory() {
+    var name = newCategoryInput.value.trim();
+    if (!name) { newCategoryInput.focus(); return; }
+    state.categories.push({ id: uid(), name: name, items: [] });
+    newCategoryInput.value = "";
+    save();
+    render();
+  }
+  addCategoryBtn.addEventListener("click", addCategory);
+  newCategoryInput.addEventListener("keydown", function (e) {
+    if (e.key === "Enter") { e.preventDefault(); addCategory(); }
+  });
+
+  // ---- Reset for new week ----
+  document.getElementById("resetBtn").addEventListener("click", function () {
+    var p = computeProgress();
+    if (p.total === 0) return;
+    if (confirm("Svuotare tutti i valori per iniziare l'inventario di questa settimana? La lista di prodotti resta.")) {
+      state.categories.forEach(function (c) { c.items.forEach(function (it) { it.value = ""; }); });
+      save();
+      render();
+    }
+  });
+
+  // ---- Message generation ----
+  function buildMessage() {
+    var lines = ["📋 Inventario di " + todayLabel(), ""];
+    state.categories.forEach(function (cat) {
+      if (cat.items.length === 0) return;
+      lines.push("*" + cat.name.toUpperCase() + "*");
+      cat.items.forEach(function (it) {
+        var val = (it.value || "").trim();
+        lines.push("- " + it.name + ": " + (val === "" ? "⚠️ da controllare" : val));
+      });
+      lines.push("");
+    });
+    return lines.join("\n").trim();
+  }
+
+  var modalOverlay = document.getElementById("modalOverlay");
+  var messagePreview = document.getElementById("messagePreview");
+  var copyFeedback = document.getElementById("copyFeedback");
+
+  document.getElementById("generateBtn").addEventListener("click", function () {
+    var p = computeProgress();
+    if (p.total === 0) {
+      alert("Aggiungi prima almeno un ingrediente (tocca ✏️ per modificare la lista).");
+      return;
+    }
+    messagePreview.textContent = buildMessage();
+    copyFeedback.textContent = "";
+    modalOverlay.hidden = false;
+  });
+
+  function closeModal() { modalOverlay.hidden = true; }
+  document.getElementById("modalClose").addEventListener("click", closeModal);
+  modalOverlay.addEventListener("click", function (e) {
+    if (e.target === modalOverlay) closeModal();
+  });
+
+  document.getElementById("copyBtn").addEventListener("click", function () {
+    var text = messagePreview.textContent;
+    function ok() { copyFeedback.textContent = "Copiato ✓ — incollalo su WhatsApp"; }
+    function fail() {
+      try {
+        var ta = document.createElement("textarea");
+        ta.value = text;
+        ta.style.position = "fixed";
+        ta.style.opacity = "0";
+        document.body.appendChild(ta);
+        ta.focus();
+        ta.select();
+        document.execCommand("copy");
+        document.body.removeChild(ta);
+        ok();
+      } catch (err) {
+        copyFeedback.textContent = "Copia non riuscita: seleziona il testo manualmente.";
+      }
+    }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(ok, fail);
+    } else {
+      fail();
+    }
+  });
+
+  document.getElementById("whatsappBtn").addEventListener("click", function () {
+    var text = messagePreview.textContent;
+    window.open("https://wa.me/?text=" + encodeURIComponent(text), "_blank");
+  });
+
+  // ---- Backup: export / import (safety net if the browser ever clears storage) ----
+  document.getElementById("exportBtn").addEventListener("click", function () {
+    var blob = new Blob([JSON.stringify(state, null, 2)], { type: "application/json" });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement("a");
+    a.href = url;
+    a.download = "check-scorte-lista.json";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  });
+
+  var importFileInput = document.getElementById("importFileInput");
+  document.getElementById("importBtn").addEventListener("click", function () {
+    importFileInput.click();
+  });
+  importFileInput.addEventListener("change", function () {
+    var file = importFileInput.files && importFileInput.files[0];
+    if (!file) return;
+    var reader = new FileReader();
+    reader.onload = function () {
+      try {
+        var parsed = JSON.parse(String(reader.result));
+        if (!parsed || !Array.isArray(parsed.categories)) throw new Error("formato non valido");
+        if (confirm("Sostituire la lista attuale con quella importata?")) {
+          state = parsed;
+          save();
+          render();
+        }
+      } catch (err) {
+        alert("File non valido.");
+      }
+      importFileInput.value = "";
+    };
+    reader.readAsText(file);
+  });
+})();
+</script>
+</body>
+</html>
