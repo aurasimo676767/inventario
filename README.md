@@ -19,7 +19,11 @@ npx vercel dev
 3. Su Vercel: Project → Settings → Environment Variables → aggiungi queste due variabili (Production).
 4. Fai un redeploy perché le nuove variabili abbiano effetto.
 
-Ogni dispositivo legge/scrive lo stesso inventario tramite `/api/inventory`; un valore in cache locale (`localStorage`) permette al sito di continuare a funzionare anche offline momentaneamente. In modalità "Modifica lista" (icona matita) sono disponibili anche "Esporta lista" e "Importa lista" per un backup/ripristino manuale in JSON, e "Svuota inventario" per azzerare i valori a inizio settimana.
+Ogni dispositivo legge/scrive lo stesso inventario tramite `/api/inventory?dept=...`; un valore in cache locale (`localStorage`) permette al sito di continuare a funzionare anche offline momentaneamente. In modalità "Modifica lista" (icona matita) sono disponibili anche "Esporta lista" e "Importa lista" per un backup/ripristino manuale in JSON, e "Svuota inventario" per azzerare i valori a inizio settimana.
+
+## Reparti (Cucina / Cassieri)
+
+Il sito ha due liste completamente separate ("reparti"), selezionabili dalle due schede in alto: **Cucina** e **Cassieri**. Ognuna ha le proprie categorie, ingredienti e messaggio WhatsApp, salvate su chiavi diverse in Redis (`inventario-panineria-state` per Cucina, per compatibilità con i dati già esistenti; `inventario-panineria-state-cassieri` per Cassieri). L'URL riflette il reparto attivo (`?dept=cucina` o `?dept=cassieri`), quindi si può anche salvare un collegamento diretto a un reparto sulla schermata home del telefono.
 
 ## Deploy
 

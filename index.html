@@ -124,6 +124,32 @@
     border-color: var(--accent);
   }
 
+  .dept-switch {
+    display: flex;
+    gap: 6px;
+    margin-top: 12px;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 4px;
+  }
+  .dept-tab {
+    flex: 1;
+    border: none;
+    background: transparent;
+    color: var(--text-muted);
+    font-weight: 700;
+    font-size: 0.88rem;
+    padding: 10px 8px;
+    border-radius: 7px;
+    cursor: pointer;
+  }
+  .dept-tab.active {
+    background: var(--accent);
+    color: var(--accent-contrast);
+  }
+  .dept-tab:active { transform: scale(0.98); }
+
   .progress-row {
     margin-top: 12px;
     display: flex;
@@ -479,6 +505,10 @@
       </div>
       <button id="editToggle" class="icon-btn" aria-label="Modifica lista" title="Modifica lista">✏️</button>
     </div>
+    <div class="dept-switch" role="tablist">
+      <button class="dept-tab" data-dept="cucina" role="tab">👨‍🍳 Cucina</button>
+      <button class="dept-tab" data-dept="cassieri" role="tab">💰 Cassieri</button>
+    </div>
     <div class="progress-row">
       <div class="progress-track"><div id="progressFill" class="progress-fill"></div></div>
       <span id="progressLabel" class="progress-label">0/0</span>
@@ -524,11 +554,23 @@
 (function () {
   "use strict";
 
-  var STORAGE_KEY = "checkScorte_v1";
-  var API_URL = "/api/inventory";
+  var DEPTS = ["cucina", "cassieri"];
+  var DEPT_LABELS = { cucina: "Cucina", cassieri: "Cassieri" };
   var POLL_MS = 5000;
   var SAVE_DEBOUNCE_MS = 700;
 
+  function storageKeyFor(dept) { return "checkScorte_v1_" + dept; }
+  function apiUrlFor(dept) { return "/api/inventory?dept=" + encodeURIComponent(dept); }
+
+  function getDeptFromUrl() {
+    try {
+      var d = new URLSearchParams(location.search).get("dept");
+      if (DEPTS.indexOf(d) !== -1) return d;
+    } catch (e) { /* ignore */ }
+    return DEPTS[0];
+  }
+
+  var currentDept = getDeptFromUrl();
   var lastKnownUpdatedAt = 0;
   var saveTimer = null;
   var isDirty = false;
@@ -544,7 +586,10 @@
     });
   }
 
-  function defaultState() {
+  function defaultState(dept) {
+    if (dept === "cassieri") {
+      return { categories: [] };
+    }
     return {
       categories: [
         { id: uid(), name: "Pane e Patatine", items: [] },
@@ -558,9 +603,9 @@
     };
   }
 
-  function loadLocalCache() {
+  function loadLocalCache(dept) {
     try {
-      var raw = localStorage.getItem(STORAGE_KEY);
+      var raw = localStorage.getItem(storageKeyFor(dept));
       if (raw) {
         var parsed = JSON.parse(raw);
         if (parsed && Array.isArray(parsed.categories)) return parsed;
@@ -570,10 +615,10 @@
   }
 
   function saveLocalCache() {
-    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch (e) { /* best effort */ }
+    try { localStorage.setItem(storageKeyFor(currentDept), JSON.stringify(state)); } catch (e) { /* best effort */ }
   }
 
-  var state = loadLocalCache() || defaultState();
+  var state = loadLocalCache(currentDept) || defaultState(currentDept);
 
   var app = document.getElementById("app");
   var categoryList = document.getElementById("categoryList");
@@ -672,8 +717,6 @@
     updateProgressUI();
   }
 
-  render();
-
   // ---- Sync with shared server storage, so every device sees the same list ----
   function isTypingInList() {
     var el = document.activeElement;
@@ -688,9 +731,10 @@
   }
 
   function pushToServer() {
+    var dept = currentDept;
     isDirty = false;
     isSaving = true;
-    fetch(API_URL, {
+    fetch(apiUrlFor(dept), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ state: state })
@@ -698,16 +742,18 @@
       .then(function (r) { return r.json(); })
       .then(function (data) {
         isSaving = false;
-        if (data && data.updatedAt) lastKnownUpdatedAt = data.updatedAt;
+        if (dept === currentDept && data && data.updatedAt) lastKnownUpdatedAt = data.updatedAt;
       })
       .catch(function () { isSaving = false; });
   }
 
   function pollFromServer() {
     if (isDirty || isSaving || isTypingInList()) return;
-    fetch(API_URL)
+    var dept = currentDept;
+    fetch(apiUrlFor(dept))
       .then(function (r) { return r.json(); })
       .then(function (data) {
+        if (dept !== currentDept) return; // user switched tab while this was in flight
         if (data && data.state && data.updatedAt > lastKnownUpdatedAt) {
           state = data.state;
           lastKnownUpdatedAt = data.updatedAt;
@@ -718,22 +764,58 @@
       .catch(function () { /* offline: keep working on the local copy */ });
   }
 
-  fetch(API_URL)
-    .then(function (r) { return r.json(); })
-    .then(function (data) {
-      if (data && data.state) {
-        state = data.state;
-        lastKnownUpdatedAt = data.updatedAt || 0;
-        saveLocalCache();
-        render();
-      } else {
-        pushToServer();
-      }
-    })
-    .catch(function () { /* offline: keep showing the local cache already rendered */ })
-    .then(function () {
-      setInterval(pollFromServer, POLL_MS);
+  function loadDeptData() {
+    var dept = currentDept;
+    state = loadLocalCache(dept) || defaultState(dept);
+    lastKnownUpdatedAt = 0;
+    render();
+    fetch(apiUrlFor(dept))
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        if (dept !== currentDept) return; // user switched tab again before this returned
+        if (data && data.state) {
+          state = data.state;
+          lastKnownUpdatedAt = data.updatedAt || 0;
+          saveLocalCache();
+          render();
+        } else {
+          pushToServer();
+        }
+      })
+      .catch(function () { /* offline: keep showing the local cache already rendered */ });
+  }
+
+  function updateDeptTabsUI() {
+    document.querySelectorAll(".dept-tab").forEach(function (tab) {
+      tab.classList.toggle("active", tab.getAttribute("data-dept") === currentDept);
     });
+  }
+
+  function switchDept(dept) {
+    if (dept === currentDept || DEPTS.indexOf(dept) === -1) return;
+    clearTimeout(saveTimer);
+    if (isDirty) pushToServer(); // flush pending changes to the department we're leaving
+    modalOverlay.hidden = true;
+    app.classList.remove("edit-mode");
+    editToggle.classList.remove("active");
+    editToggle.textContent = "✏️";
+    editToggle.title = "Modifica lista";
+    currentDept = dept;
+    history.replaceState(null, "", "?dept=" + dept);
+    updateDeptTabsUI();
+    loadDeptData();
+  }
+
+  document.querySelectorAll(".dept-tab").forEach(function (tab) {
+    tab.addEventListener("click", function () {
+      switchDept(tab.getAttribute("data-dept"));
+    });
+  });
+  updateDeptTabsUI();
+  history.replaceState(null, "", "?dept=" + currentDept);
+
+  loadDeptData();
+  setInterval(pollFromServer, POLL_MS);
 
   // ---- Edit mode ----
   editToggle.addEventListener("click", function () {
@@ -878,7 +960,7 @@
 
   // ---- Message generation ----
   function buildMessage() {
-    var lines = ["📋 Inventario di " + todayLabel(), ""];
+    var lines = ["📋 Inventario " + DEPT_LABELS[currentDept] + " – " + todayLabel(), ""];
     state.categories.forEach(function (cat) {
       var filledItems = cat.items.filter(function (it) { return isFilled(it.value); });
       if (filledItems.length === 0) return;
@@ -949,7 +1031,7 @@
     var url = URL.createObjectURL(blob);
     var a = document.createElement("a");
     a.href = url;
-    a.download = "inventario-panineria-lista.json";
+    a.download = "inventario-panineria-lista-" + currentDept + ".json";
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);

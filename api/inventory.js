@@ -1,4 +1,9 @@
-const REDIS_KEY = "inventario-panineria-state";
+const LEGACY_KEY = "inventario-panineria-state"; // "cucina" keeps the original key so existing data isn't lost
+const ALLOWED_DEPTS = ["cucina", "cassieri"];
+
+function redisKeyFor(dept) {
+  return dept === "cassieri" ? "inventario-panineria-state-cassieri" : LEGACY_KEY;
+}
 
 async function redis(command) {
   const url = process.env.UPSTASH_REDIS_REST_URL;
@@ -25,8 +30,11 @@ async function redis(command) {
 
 module.exports = async (req, res) => {
   try {
+    const dept = ALLOWED_DEPTS.indexOf(req.query && req.query.dept) !== -1 ? req.query.dept : "cucina";
+    const key = redisKeyFor(dept);
+
     if (req.method === "GET") {
-      const raw = await redis(["GET", REDIS_KEY]);
+      const raw = await redis(["GET", key]);
       const payload = raw ? JSON.parse(raw) : { state: null, updatedAt: 0 };
       res.status(200).json(payload);
       return;
@@ -35,7 +43,7 @@ module.exports = async (req, res) => {
     if (req.method === "POST") {
       const body = typeof req.body === "object" && req.body ? req.body : JSON.parse(req.body || "{}");
       const payload = { state: body.state, updatedAt: Date.now() };
-      await redis(["SET", REDIS_KEY, JSON.stringify(payload)]);
+      await redis(["SET", key, JSON.stringify(payload)]);
       res.status(200).json(payload);
       return;
     }
