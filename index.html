@@ -124,6 +124,46 @@
     border-color: var(--accent);
   }
 
+  .search-row {
+    position: relative;
+    margin-top: 12px;
+  }
+  .search-row input {
+    width: 100%;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--text);
+    border-radius: 10px;
+    padding: 10px 36px 10px 34px;
+    font-size: 16px;
+    font-family: inherit;
+  }
+  .search-row input::-webkit-search-cancel-button { display: none; }
+  .search-icon {
+    position: absolute;
+    left: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 0.95rem;
+    pointer-events: none;
+    opacity: 0.7;
+  }
+  .search-clear {
+    position: absolute;
+    right: 4px;
+    top: 50%;
+    transform: translateY(-50%);
+    border: none;
+    background: none;
+    color: var(--text-muted);
+    width: 30px;
+    height: 30px;
+    border-radius: 6px;
+    font-size: 0.95rem;
+    cursor: pointer;
+  }
+  .search-clear[hidden] { display: none; }
+
   .dept-switch {
     display: flex;
     gap: 6px;
@@ -271,6 +311,18 @@
   }
   .app.edit-mode .drag-handle { display: inline-flex; align-items: center; justify-content: center; }
   .item-drag-handle { width: 28px; height: 32px; font-size: 1rem; }
+
+  .reorder-btn {
+    display: none;
+    flex: none;
+    width: 26px;
+    height: 32px;
+    font-size: 0.8rem;
+    padding: 0;
+  }
+  .app.edit-mode .reorder-btn { display: inline-flex; align-items: center; justify-content: center; }
+  .reorder-btn:disabled { opacity: 0.3; cursor: default; }
+  .reorder-btn:disabled:active { transform: none; }
 
   .category-card.dragging,
   .item-row.dragging {
@@ -536,6 +588,11 @@
       <button class="dept-tab" data-dept="cucina" role="tab">👨‍🍳 Cucina</button>
       <button class="dept-tab" data-dept="cassieri" role="tab">💰 Cassieri</button>
     </div>
+    <div class="search-row">
+      <span class="search-icon">🔍</span>
+      <input id="searchInput" type="search" inputmode="search" autocomplete="off" placeholder="Cerca ingrediente o categoria…" />
+      <button id="searchClear" class="search-clear" hidden aria-label="Cancella ricerca">✕</button>
+    </div>
     <div class="progress-row">
       <div class="progress-track"><div id="progressFill" class="progress-fill"></div></div>
       <span id="progressLabel" class="progress-label">0/0</span>
@@ -598,6 +655,7 @@
   }
 
   var currentDept = getDeptFromUrl();
+  var searchQuery = "";
   var lastKnownUpdatedAt = 0;
   var saveTimer = null;
   var isDirty = false;
@@ -653,6 +711,8 @@
   var progressFill = document.getElementById("progressFill");
   var progressLabel = document.getElementById("progressLabel");
   var dateLabel = document.getElementById("dateLabel");
+  var searchInput = document.getElementById("searchInput");
+  var searchClear = document.getElementById("searchClear");
 
   function todayLabel() {
     var d = new Date();
@@ -687,12 +747,16 @@
     return "row-ok";
   }
 
-  function renderCategory(cat) {
+  function renderCategory(cat, idx, catsTotal) {
     var filled = cat.items.filter(function (it) { return isFilled(it.value); }).length;
     var total = cat.items.length;
     var countClass = total > 0 && filled === total ? "all-done" : "";
 
-    var itemsHtml = cat.items.map(function (it) {
+    var visibleItems = (searchQuery && !matchesSearch(cat.name))
+      ? cat.items.filter(function (it) { return matchesSearch(it.name); })
+      : cat.items;
+
+    var itemsHtml = visibleItems.map(function (it) {
       var cls = rowClass(it.value);
       var finitoActive = isFinito(it.value) ? "active" : "";
       return (
@@ -723,6 +787,10 @@
             '<span class="category-name">' + esc(cat.name) + "</span>" +
           "</button>" +
           '<span class="category-count ' + countClass + '">' + filled + "/" + total + "</span>" +
+          '<button class="icon-btn reorder-btn" data-action="move-cat-up" data-cat-id="' + cat.id + '" ' +
+            'aria-label="Sposta categoria su"' + (idx === 0 ? " disabled" : "") + ">▲</button>" +
+          '<button class="icon-btn reorder-btn" data-action="move-cat-down" data-cat-id="' + cat.id + '" ' +
+            'aria-label="Sposta categoria giù"' + (idx === catsTotal - 1 ? " disabled" : "") + ">▼</button>" +
           '<button class="icon-btn category-delete" data-action="delete-category" ' +
             'data-cat-id="' + cat.id + '" aria-label="Elimina categoria">✕</button>' +
         "</div>" +
@@ -737,11 +805,35 @@
     );
   }
 
+  function normalizeText(s) {
+    return String(s || "")
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(new RegExp("[\\u0300-\\u036f]", "g"), "");
+  }
+
+  function matchesSearch(text) {
+    if (!searchQuery) return true;
+    return normalizeText(text).indexOf(searchQuery) !== -1;
+  }
+
+  function categoryMatchesSearch(cat) {
+    if (!searchQuery) return true;
+    if (matchesSearch(cat.name)) return true;
+    return cat.items.some(function (it) { return matchesSearch(it.name); });
+  }
+
   function render() {
-    if (state.categories.length === 0) {
+    var cats = state.categories;
+    if (cats.length === 0) {
       categoryList.innerHTML = '<p class="empty-state">Nessuna categoria. Tocca ✏️ e aggiungine una per iniziare.</p>';
+    } else if (searchQuery && !cats.some(categoryMatchesSearch)) {
+      categoryList.innerHTML = '<p class="empty-state">Nessun risultato per «' + esc(searchInput.value.trim()) + '».</p>';
     } else {
-      categoryList.innerHTML = state.categories.map(renderCategory).join("");
+      categoryList.innerHTML = cats.map(function (cat, idx) {
+        if (searchQuery && !categoryMatchesSearch(cat)) return "";
+        return renderCategory(cat, idx, cats.length);
+      }).join("");
     }
     updateProgressUI();
   }
@@ -825,6 +917,9 @@
     clearTimeout(saveTimer);
     if (isDirty) pushToServer(); // flush pending changes to the department we're leaving
     modalOverlay.hidden = true;
+    searchInput.value = "";
+    searchQuery = "";
+    searchClear.hidden = true;
     app.classList.remove("edit-mode");
     editToggle.classList.remove("active");
     editToggle.textContent = "✏️";
@@ -839,6 +934,20 @@
     tab.addEventListener("click", function () {
       switchDept(tab.getAttribute("data-dept"));
     });
+  });
+
+  // ---- Live search (filters as you type, no button to press) ----
+  searchInput.addEventListener("input", function () {
+    searchQuery = normalizeText(searchInput.value.trim());
+    searchClear.hidden = !searchInput.value;
+    render();
+  });
+  searchClear.addEventListener("click", function () {
+    searchInput.value = "";
+    searchQuery = "";
+    searchClear.hidden = true;
+    render();
+    searchInput.focus();
   });
   updateDeptTabsUI();
   history.replaceState(null, "", "?dept=" + currentDept);
@@ -911,6 +1020,11 @@
       return;
     }
 
+    if (action === "move-cat-up" || action === "move-cat-down") {
+      moveCategory(btn.getAttribute("data-cat-id"), action === "move-cat-up" ? -1 : 1);
+      return;
+    }
+
     if (action === "add-item") {
       var aCatId = btn.getAttribute("data-cat-id");
       var input = categoryList.querySelector('[data-new-item-for="' + aCatId + '"]');
@@ -958,6 +1072,18 @@
       badge.textContent = filled + "/" + total;
       badge.classList.toggle("all-done", total > 0 && filled === total);
     }
+  }
+
+  function moveCategory(catId, dir) {
+    var idx = state.categories.findIndex(function (c) { return c.id === catId; });
+    if (idx === -1) return;
+    var newIdx = idx + dir;
+    if (newIdx < 0 || newIdx >= state.categories.length) return;
+    var tmp = state.categories[idx];
+    state.categories[idx] = state.categories[newIdx];
+    state.categories[newIdx] = tmp;
+    persist();
+    render();
   }
 
   // ---- Drag to reorder (categories, and ingredients within their category) ----
