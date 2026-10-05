@@ -2,7 +2,7 @@
 
 Sito per fare l'inventario settimanale dallo smartphone (o dal PC): si segna categoria per categoria cosa è rimasto (e quanto) o cosa è finito, e alla fine si genera in un tocco il messaggio pronto da copiare o aprire direttamente su WhatsApp.
 
-`index.html` contiene tutto il sito (HTML, CSS, JS). `api/inventory.js` è l'unica funzione serverless: legge/scrive l'inventario condiviso su Redis (Upstash), così tutti i dispositivi vedono sempre la stessa lista.
+`index.html` contiene la struttura e la logica del sito; `styles.css` definisce il design responsive e il tema scuro; `icons.js` contiene le icone SVG locali, associate automaticamente al nome dell'ingrediente (con ripiego sulla categoria o su un'icona generica). Non servono librerie o richieste esterne per le icone. `api/inventory.js` è l'unica funzione serverless: legge/scrive l'inventario condiviso su Redis (Upstash), così tutti i dispositivi vedono sempre la stessa lista.
 
 ## Sviluppo locale
 
